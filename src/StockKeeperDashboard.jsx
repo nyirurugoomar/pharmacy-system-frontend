@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bar, Pie } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,6 +11,8 @@ import {
 } from 'chart.js';
 import { useNavigate } from 'react-router-dom';
 import { FaPills, FaEdit, FaTrash } from 'react-icons/fa';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -19,11 +21,10 @@ function StockKeeperDashboard() {
   // Purchase state
   const [purchase, setPurchase] = useState({
     medicineName: '',
-    quantity: '',
-    unitPrice: '',
+    totalAmount: '',
     supplier: '',
-    purchaseDate: '',
-    status: 'pending',
+    purchaseDate: new Date(),
+    status: 'paid',
     notes: ''
   });
   const [purchases, setPurchases] = useState([]);
@@ -32,14 +33,14 @@ function StockKeeperDashboard() {
   const [search, setSearch] = useState('');
   const [summary, setSummary] = useState(null);
   const [total, setTotal] = useState(null);
-
   const API = 'https://pharmacy-system-efz8.onrender.com/stock-keeper';
   const token = localStorage.getItem('token');
   const authHeader = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
 
   // Fetch purchases
   const fetchPurchases = async () => {
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API}/purchases`, { headers: authHeader });
       if (!res.ok) throw new Error('Failed to fetch purchases');
@@ -70,12 +71,16 @@ function StockKeeperDashboard() {
 
   // Fetch total purchases
   const fetchTotalPurchases = async () => {
+    setLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API}/total-purchases`, { headers: authHeader });
       if (!res.ok) throw new Error('Failed to fetch total purchases');
       setTotal(await res.json());
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,19 +95,34 @@ function StockKeeperDashboard() {
     e.preventDefault();
     setError('');
     try {
-      const totalAmount = Number(purchase.quantity) * Number(purchase.unitPrice);
+      const purchaseData = {
+        medicineName: purchase.medicineName,
+        totalAmount: parseInt(purchase.totalAmount),
+        supplier: purchase.supplier,
+        purchaseDate: purchase.purchaseDate.toISOString(),
+        status: purchase.status,
+        notes: purchase.notes
+      };
+
       const res = await fetch(`${API}/purchase`, {
         method: 'POST',
         headers: authHeader,
-        body: JSON.stringify({
-          ...purchase,
-          quantity: Number(purchase.quantity),
-          unitPrice: Number(purchase.unitPrice),
-          totalAmount
-        })
+        body: JSON.stringify(purchaseData)
       });
-      if (!res.ok) throw new Error('Failed to add purchase');
-      setPurchase({ medicineName: '', quantity: '', unitPrice: '', supplier: '', purchaseDate: '', status: 'pending', notes: '' });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to add purchase');
+      }
+
+      setPurchase({
+        medicineName: '',
+        totalAmount: '',
+        supplier: '',
+        purchaseDate: new Date(),
+        status: 'paid',
+        notes: ''
+      });
       fetchPurchases();
       fetchSummary();
       fetchTotalPurchases();
@@ -115,7 +135,7 @@ function StockKeeperDashboard() {
   const purchasesByDate = {};
   purchases.forEach(p => {
     const date = p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString() : 'Unknown';
-    purchasesByDate[date] = (purchasesByDate[date] || 0) + Number(p.totalAmount || 0);
+    purchasesByDate[date] = (purchasesByDate[date] || 0) + (Number(p.totalAmount) || 0);
   });
   const chartLabels = Object.keys(purchasesByDate).sort((a, b) => new Date(a) - new Date(b));
   const chartData = chartLabels.map(date => purchasesByDate[date]);
@@ -141,31 +161,18 @@ function StockKeeperDashboard() {
     },
   };
 
-  // Purchases by Supplier pie chart data
+  // Purchases by Supplier data
   const purchasesBySupplier = {};
   purchases.forEach(p => {
     if (!p.supplier) return;
-    purchasesBySupplier[p.supplier] = (purchasesBySupplier[p.supplier] || 0) + Number(p.totalAmount || 0);
+    purchasesBySupplier[p.supplier] = (purchasesBySupplier[p.supplier] || 0) + (Number(p.totalAmount) || 0);
   });
-  const supplierLabels = Object.keys(purchasesBySupplier);
-  const supplierData = supplierLabels.map(s => purchasesBySupplier[s]);
-  const supplierPieData = {
-    labels: supplierLabels,
-    datasets: [
-      {
-        data: supplierData,
-        backgroundColor: [
-          '#36a2eb', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40', '#8bc34a', '#e57373', '#ba68c8', '#ffd54f'
-        ],
-      },
-    ],
-  };
 
   // Stat card calculations
-  const totalPurchases = purchases.reduce((sum, p) => sum + (Number(p.amountPaid) || 0), 0);
+  const totalPurchases = purchases.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0);
   const outstandingCredits = purchases
     .filter((p) => p.paymentStatus === 'Credit')
-    .reduce((sum, p) => sum + (Number(p.amountPaid) || 0), 0);
+    .reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0);
   const uniqueDepots = new Set(purchases.map((p) => p.depotName)).size;
 
   // Filtered purchases
@@ -178,9 +185,6 @@ function StockKeeperDashboard() {
     localStorage.removeItem('token');
     navigate('/login');
   };
-
-  // After fetching summary
-  console.log('SUMMARY:', summary);
 
   return (
     <div className="d-flex" style={{ minHeight: '100vh', width: 1430, background: '#f4f6fa' }}>
@@ -209,68 +213,66 @@ function StockKeeperDashboard() {
         {/* Stat Cards */}
         <div className="w-100 px-4 mt-4" style={{ maxWidth: '100%' }}>
           <div className="row g-4">
-            
-            
             {/* Stat Cards for Summary */}
-        {summary && (
-          <div className="row g-4 mb-4">
-            <div className="col-md-6">
-              <div className="card text-center shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title">Total Purchases</h6>
-                  <h3 className="text-success">{summary?.totalPurchases?.totalAmount ?? 'N/A'} Rwf</h3>
+            {summary && (
+              <div className="row g-4 mb-4">
+                <div className="col-md-6">
+                  <div className="card text-center shadow-sm">
+                    <div className="card-body">
+                      <h6 className="card-title">Total Purchases</h6>
+                      <h3 className="text-success">{summary?.totalPurchases?.totalAmount ?? 'N/A'} Rwf</h3>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            {summary?.outstandingCredits && (
-              <div className="col-md-6">
-                <div className="card text-center shadow-sm">
-                  <div className="card-body">
-                    <h6 className="card-title">Outstanding Credits</h6>
-                    <h3 className="text-warning">
-                      {summary?.outstandingCredits?.totalOutstanding ?? 'N/A'} Rwf
-                    </h3>
-                    {typeof summary?.outstandingCredits?.numberOfOutstanding !== 'undefined' && (
-                      <div style={{ fontSize: 14, color: '#888' }}>
-                        {summary?.outstandingCredits?.numberOfOutstanding} outstanding purchases
+                {summary?.outstandingCredits && (
+                  <div className="col-md-6">
+                    <div className="card text-center shadow-sm">
+                      <div className="card-body">
+                        <h6 className="card-title">Outstanding Credits</h6>
+                        <h3 className="text-warning">
+                          {summary?.outstandingCredits?.totalOutstanding ?? 'N/A'} Rwf
+                        </h3>
+                        {typeof summary?.outstandingCredits?.numberOfOutstanding !== 'undefined' && (
+                          <div style={{ fontSize: 14, color: '#888' }}>
+                            {summary?.outstandingCredits?.numberOfOutstanding} outstanding purchases
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Stat Cards for Total Purchases */}
+            {total && (
+              <div className="row g-4 mb-4">
+                <div className="col-md-4">
+                  <div className="card text-center shadow-sm">
+                    <div className="card-body">
+                      <h6 className="card-title">Total Purchases (Count)</h6>
+                      <h3 className="text-primary">{total.totalPurchases}</h3>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="card text-center shadow-sm">
+                    <div className="card-body">
+                      <h6 className="card-title">Total Amount</h6>
+                      <h3 className="text-success">{total.totalAmount} Rwf</h3>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="card text-center shadow-sm">
+                    <div className="card-body">
+                      <h6 className="card-title">Total Quantity</h6>
+                      <h3 className="text-info">{total.totalQuantity}</h3>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Stat Cards for Total Purchases */}
-        {total && (
-          <div className="row g-4 mb-4">
-            <div className="col-md-4">
-              <div className="card text-center shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title">Total Purchases (Count)</h6>
-                  <h3 className="text-primary">{total.totalPurchases}</h3>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="card text-center shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title">Total Amount</h6>
-                  <h3 className="text-success">{total.totalAmount} Rwf</h3>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="card text-center shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title">Total Quantity</h6>
-                  <h3 className="text-info">{total.totalQuantity}</h3>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
           </div>
 
           {/* Purchases Over Time Chart */}
@@ -287,14 +289,33 @@ function StockKeeperDashboard() {
             </div>
           </div>
 
-          {/* Purchases by Supplier Pie Chart */}
+          {/* Purchases by Supplier Table */}
           <div className="row mb-4">
             <div className="col-12">
               <div className="card shadow-sm">
                 <div className="card-body">
                   <h6 className="card-title mb-3">Purchases by Supplier</h6>
-                  <div style={{ height: 320, maxWidth: 500, margin: '0 auto' }}>
-                    <Pie data={supplierPieData} />
+                  <div className="table-responsive">
+                    <table className="table table-hover">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Supplier</th>
+                          <th>Total Amount</th>
+                          <th>Number of Purchases</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(purchasesBySupplier).map(([supplier, amount]) => (
+                          <tr key={supplier}>
+                            <td>{supplier}</td>
+                            <td>{amount.toLocaleString()} Rwf</td>
+                            <td>
+                              {purchases.filter(p => p.supplier === supplier).length}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -312,45 +333,78 @@ function StockKeeperDashboard() {
                   <form onSubmit={handlePurchaseSubmit}>
                     <div className="mb-2">
                       <label className="form-label">Medicine Name</label>
-                      <input type="text" className="form-control" value={purchase.medicineName} onChange={e => setPurchase({ ...purchase, medicineName: e.target.value })} />
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={purchase.medicineName} 
+                        onChange={e => setPurchase({ ...purchase, medicineName: e.target.value })}
+                        required
+                      />
                     </div>
                     <div className="mb-2">
-                      <label className="form-label">Quantity</label>
-                      <input type="number" className="form-control" value={purchase.quantity} onChange={e => setPurchase({ ...purchase, quantity: e.target.value })} />
-                    </div>
-                    <div className="mb-2">
-                      <label className="form-label">Unit Price</label>
-                      <input type="number" className="form-control" value={purchase.unitPrice} onChange={e => setPurchase({ ...purchase, unitPrice: e.target.value })} />
+                      <label className="form-label">Total Amount (Rwf)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={purchase.totalAmount} 
+                        onChange={e => setPurchase({ ...purchase, totalAmount: e.target.value })}
+                        required
+                        min="0"
+                        step="1"
+                        placeholder="Enter amount in Rwf"
+                      />
                     </div>
                     <div className="mb-2">
                       <label className="form-label">Supplier</label>
-                      <input type="text" className="form-control" value={purchase.supplier} onChange={e => setPurchase({ ...purchase, supplier: e.target.value })} />
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={purchase.supplier} 
+                        onChange={e => setPurchase({ ...purchase, supplier: e.target.value })}
+                        required
+                      />
                     </div>
                     <div className="mb-2">
                       <label className="form-label">Purchase Date</label>
-                      <input type="date" className="form-control" value={purchase.purchaseDate} onChange={e => setPurchase({ ...purchase, purchaseDate: e.target.value })} />
+                      <DatePicker
+                        selected={purchase.purchaseDate}
+                        onChange={(date) => setPurchase({ ...purchase, purchaseDate: date })}
+                        className="form-control"
+                        dateFormat="MMMM d, yyyy"
+                        required
+                      />
                     </div>
                     <div className="mb-2">
                       <label className="form-label">Status</label>
-                      <select className="form-select" value={purchase.status} onChange={e => setPurchase({ ...purchase, status: e.target.value })}>
-                        <option value="pending">Pending</option>
+                      <select 
+                        className="form-select" 
+                        value={purchase.status} 
+                        onChange={e => setPurchase({ ...purchase, status: e.target.value })}
+                        required
+                      >
                         <option value="paid">Paid</option>
+                        <option value="pending">Pending</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
                     </div>
                     <div className="mb-2">
                       <label className="form-label">Notes</label>
-                      <textarea className="form-control" value={purchase.notes} onChange={e => setPurchase({ ...purchase, notes: e.target.value })} />
-                    </div>
-                    <div className="mb-2">
-                      <strong>Total Amount: </strong>{Number(purchase.quantity) * Number(purchase.unitPrice) || 0} Rwf
+                      <textarea 
+                        className="form-control" 
+                        value={purchase.notes} 
+                        onChange={e => setPurchase({ ...purchase, notes: e.target.value })}
+                        rows="3"
+                      />
                     </div>
                     {error && <div className="alert alert-danger py-1">{error}</div>}
-                    <button type="submit" className="btn btn-primary mt-2 w-100" disabled={loading}>Add Purchase</button>
+                    <button type="submit" className="btn btn-primary mt-2 w-100" disabled={loading}>
+                      {loading ? 'Adding...' : 'Add Purchase'}
+                    </button>
                   </form>
                 </div>
               </div>
             </div>
+
             {/* Purchases Table */}
             <div className="col-md-6">
               <div className="card shadow-lg mb-4 border-0" style={{ borderRadius: 18 }}>
@@ -375,30 +429,26 @@ function StockKeeperDashboard() {
                       <thead className="table-success">
                         <tr>
                           <th>Medicine Name</th>
-                          <th>Quantity</th>
-                          <th>Unit Price</th>
                           <th>Supplier</th>
                           <th>Purchase Date</th>
                           <th>Total Amount</th>
                           <th>Status</th>
                           <th>Notes</th>
-                          
                         </tr>
                       </thead>
                       <tbody>
                         {filteredPurchases.map((p) => (
                           <tr key={p._id}>
                             <td>{p.medicineName}</td>
-                            <td>{p.quantity}</td>
-                            <td>{p.unitPrice} Rwf</td>
                             <td>{p.supplier}</td>
-                            <td>{p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString() : ''}</td>
-                            <td>{p.totalAmount} Rwf</td>
+                            <td>{new Date(p.purchaseDate).toLocaleDateString()}</td>
+                            <td>{p.totalAmount.toLocaleString()} Rwf</td>
                             <td>
-                              <span className={`badge bg-${p.status === 'paid' ? 'success' : p.status === 'pending' ? 'warning text-dark' : 'danger'}`}>{p.status}</span>
+                              <span className={`badge bg-${p.status === 'paid' ? 'success' : p.status === 'pending' ? 'warning text-dark' : 'danger'}`}>
+                                {p.status}
+                              </span>
                             </td>
                             <td>{p.notes}</td>
-                            
                           </tr>
                         ))}
                       </tbody>
@@ -410,8 +460,6 @@ function StockKeeperDashboard() {
             </div>
           </div>
         </div>
-
-        
       </div>
     </div>
   );

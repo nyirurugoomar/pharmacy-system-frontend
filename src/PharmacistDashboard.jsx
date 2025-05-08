@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FaChartLine, FaMoneyBillWave, FaReceipt, FaSignOutAlt, FaSearch, FaUser, FaCalendarAlt } from 'react-icons/fa';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 function PharmacistDashboard() {
   const navigate = useNavigate();
@@ -11,13 +14,18 @@ function PharmacistDashboard() {
   const [medError, setMedError] = useState('');
 
   // Insurance record state
-  const [insuranceRecord, setInsuranceRecord] = useState({ insuranceCompany: '', clientCount: '', date: '' });
+  const [insuranceRecord, setInsuranceRecord] = useState({ insuranceCompany: '', clientCount: '', date: new Date() });
   const [insuranceRecords, setInsuranceRecords] = useState([]);
   const [insRecLoading, setInsRecLoading] = useState(false);
   const [insRecError, setInsRecError] = useState('');
 
   // Insurance payment state (updated fields)
-  const [insurancePayment, setInsurancePayment] = useState({ insuranceCompany: '', amount: '', status: 'Paid', date: '' });
+  const [insurancePayment, setInsurancePayment] = useState({ 
+    insuranceCompany: '', 
+    amount: '', 
+    status: 'Paid', 
+    date: new Date() 
+  });
   const [insurancePayments, setInsurancePayments] = useState([]);
   const [insPayLoading, setInsPayLoading] = useState(false);
   const [insPayError, setInsPayError] = useState('');
@@ -128,11 +136,12 @@ function PharmacistDashboard() {
         headers: authHeader,
         body: JSON.stringify({
           ...insuranceRecord,
-          clientCount: Number(insuranceRecord.clientCount)
+          clientCount: Number(insuranceRecord.clientCount),
+          date: insuranceRecord.date.toISOString()
         })
       });
       if (!res.ok) throw new Error('Failed to add insurance record');
-      setInsuranceRecord({ insuranceCompany: '', clientCount: '', date: '' });
+      setInsuranceRecord({ insuranceCompany: '', clientCount: '', date: new Date() });
       fetchInsuranceRecords();
     } catch (err) {
       setInsRecError(err.message);
@@ -149,11 +158,12 @@ function PharmacistDashboard() {
         headers: authHeader,
         body: JSON.stringify({
           ...insurancePayment,
-          amount: Number(insurancePayment.amount)
+          amount: Number(insurancePayment.amount),
+          date: insurancePayment.date.toISOString()
         })
       });
       if (!res.ok) throw new Error('Failed to add insurance payment');
-      setInsurancePayment({ insuranceCompany: '', amount: '', status: 'Paid', date: '' });
+      setInsurancePayment({ insuranceCompany: '', amount: '', status: 'Paid', date: new Date() });
       fetchInsurancePayments();
     } catch (err) {
       setInsPayError(err.message);
@@ -190,99 +200,10 @@ function PharmacistDashboard() {
         </div>
 
         <div className="w-100 px-4 mt-4" style={{ maxWidth: '100%' }}>
-          <div className="row g-4">
-            {/* Add Medicine */}
-            <div className="col-md-6">
-              <div className="card shadow-sm mb-4">
-                <div className="card-body">
-                  <h6 className="card-title mb-3">Add Medicine</h6>
-                  <form onSubmit={handleMedicineSubmit}>
-                    <div className="mb-2">
-                      <label className="form-label">Name</label>
-                      <input type="text" className="form-control" value={medicine.name} onChange={e => setMedicine({ ...medicine, name: e.target.value })} />
-                    </div>
-                    <div className="mb-2">
-                      <label className="form-label">Stock</label>
-                      <input type="number" className="form-control" value={medicine.stock} onChange={e => setMedicine({ ...medicine, stock: e.target.value })} />
-                    </div>
-                    <div className="mb-2">
-                      <label className="form-label">Price</label>
-                      <input type="number" className="form-control" value={medicine.price} onChange={e => setMedicine({ ...medicine, price: e.target.value })} />
-                    </div>
-                    <div className="mb-2">
-                      <label className="form-label">Description</label>
-                      <input type="text" className="form-control" value={medicine.description} onChange={e => setMedicine({ ...medicine, description: e.target.value })} />
-                    </div>
-                    <div className="mb-2 form-check">
-                      <input type="checkbox" className="form-check-input" id="availableCheck" checked={medicine.available} onChange={e => setMedicine({ ...medicine, available: e.target.checked })} />
-                      <label className="form-check-label" htmlFor="availableCheck">Available</label>
-                    </div>
-                    {medError && <div className="alert alert-danger py-1">{medError}</div>}
-                    <button type="submit" className="btn btn-primary mt-2 w-100" disabled={medLoading}>Add Medicine</button>
-                  </form>
-                </div>
-              </div>
-            </div>
-            {/* Update Stock */}
-            <div className="col-md-6">
-              <div className="card shadow-sm mb-4">
-                <div className="card-body">
-                  <h6 className="card-title mb-3">Update Stock</h6>
-                  <form onSubmit={handleUpdateStock} className="row g-2 align-items-end">
-                    <div className="col-7">
-                      <label className="form-label">Medicine Name</label>
-                      <input type="text" className="form-control" value={updateStock.name} onChange={e => setUpdateStock({ ...updateStock, name: e.target.value })} />
-                    </div>
-                    <div className="col-3">
-                      <label className="form-label">Stock</label>
-                      <input type="number" className="form-control" value={updateStock.stock} onChange={e => setUpdateStock({ ...updateStock, stock: e.target.value })} />
-                    </div>
-                    <div className="col-2">
-                      <button type="submit" className="btn btn-warning w-100" disabled={medLoading}>Update</button>
-                    </div>
-                  </form>
-                  {medError && <div className="alert alert-danger py-1 mt-2">{medError}</div>}
-                </div>
-              </div>
-            </div>
-          </div>
+          
 
           {/* Medicines Table */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <div className="card shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title mb-3">All Medicines</h6>
-                  {medLoading ? <div>Loading...</div> : medError ? <div className="alert alert-danger py-1">{medError}</div> : (
-                  <table className="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Stock</th>
-                        <th>Price</th>
-                        <th>Description</th>
-                        <th>Available</th>
-                        <th>Created At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {medicines.map((m) => (
-                        <tr key={m._id}>
-                          <td>{m.name}</td>
-                          <td>{m.stock}</td>
-                          <td>{m.price} Rwf</td>
-                          <td>{m.description}</td>
-                          <td>{m.available ? 'Yes' : 'No'}</td>
-                          <td>{new Date(m.createdAt).toLocaleDateString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          
 
           {/* Insurance Records and Payments */}
           <div className="row g-4">
@@ -300,9 +221,27 @@ function PharmacistDashboard() {
                       <label className="form-label">Client Count</label>
                       <input type="number" className="form-control" value={insuranceRecord.clientCount} onChange={e => setInsuranceRecord({ ...insuranceRecord, clientCount: e.target.value })} />
                     </div>
-                    <div className="mb-2">
-                      <label className="form-label">Date</label>
-                      <input type="date" className="form-control" value={insuranceRecord.date} onChange={e => setInsuranceRecord({ ...insuranceRecord, date: e.target.value })} />
+                    <div className="mb-3">
+                      <label className="form-label fw-medium">Date</label>
+                      <div className="position-relative">
+                        <DatePicker
+                          selected={insuranceRecord.date}
+                          onChange={(date) => setInsuranceRecord({ ...insuranceRecord, date })}
+                          className="form-control rounded-2 ps-4"
+                          dateFormat="MMMM d, yyyy"
+                          style={{ border: '1px solid #dee2e6' }}
+                        />
+                        <FaCalendarAlt 
+                          className="position-absolute" 
+                          style={{ 
+                            top: '50%', 
+                            left: '10px', 
+                            transform: 'translateY(-50%)', 
+                            color: '#6c757d',
+                            pointerEvents: 'none'
+                          }} 
+                        />
+                      </div>
                     </div>
                     {insRecError && <div className="alert alert-danger py-1">{insRecError}</div>}
                     <button type="submit" className="btn btn-primary mt-2 w-100" disabled={insRecLoading}>Add Record</button>
@@ -332,9 +271,27 @@ function PharmacistDashboard() {
                         <option value="Pending">Pending</option>
                       </select>
                     </div>
-                    <div className="mb-2">
-                      <label className="form-label">Date</label>
-                      <input type="date" className="form-control" value={insurancePayment.date} onChange={e => setInsurancePayment({ ...insurancePayment, date: e.target.value })} />
+                    <div className="mb-3">
+                      <label className="form-label fw-medium">Date</label>
+                      <div className="position-relative">
+                        <DatePicker
+                          selected={insurancePayment.date}
+                          onChange={(date) => setInsurancePayment({ ...insurancePayment, date })}
+                          className="form-control rounded-2 ps-4"
+                          dateFormat="MMMM d, yyyy"
+                          style={{ border: '1px solid #dee2e6' }}
+                        />
+                        <FaCalendarAlt 
+                          className="position-absolute" 
+                          style={{ 
+                            top: '50%', 
+                            left: '10px', 
+                            transform: 'translateY(-50%)', 
+                            color: '#6c757d',
+                            pointerEvents: 'none'
+                          }} 
+                        />
+                      </div>
                     </div>
                     {insPayError && <div className="alert alert-danger py-1">{insPayError}</div>}
                     <button type="submit" className="btn btn-primary mt-2 w-100" disabled={insPayLoading}>Add Payment</button>
