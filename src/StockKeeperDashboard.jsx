@@ -31,8 +31,8 @@ function StockKeeperDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [summary, setSummary] = useState(null);
   const [total, setTotal] = useState(null);
+  const [summary, setSummary] = useState(null);
   const API = 'https://pharmacy-system-efz8.onrender.com/stock-keeper';
   const token = localStorage.getItem('token');
   const authHeader = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
@@ -64,6 +64,7 @@ function StockKeeperDashboard() {
       setSummary(data);
     } catch (err) {
       setError(err.message);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -176,10 +177,14 @@ function StockKeeperDashboard() {
   const uniqueDepots = new Set(purchases.map((p) => p.depotName)).size;
 
   // Filtered purchases
-  const filteredPurchases = purchases.filter(p =>
-    p.medicineName.toLowerCase().includes(search.toLowerCase()) ||
-    p.supplier.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPurchases = purchases.filter(p => {
+    const searchLower = search.toLowerCase();
+    const medicineName = (p.medicineName || '').toLowerCase();
+    const supplier = (p.supplier || '').toLowerCase();
+    
+    return medicineName.includes(searchLower) || 
+           supplier.includes(searchLower);
+  });
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -209,120 +214,6 @@ function StockKeeperDashboard() {
             <span className="fw-bold" style={{ fontSize: 16 }}>{localStorage.getItem('username')}</span>
           </div>
         </div>
-
-        {/* Stat Cards */}
-        <div className="w-100 px-4 mt-4" style={{ maxWidth: '100%' }}>
-          <div className="row g-4">
-            {/* Stat Cards for Summary */}
-            {summary && (
-              <div className="row g-4 mb-4">
-                <div className="col-md-6">
-                  <div className="card text-center shadow-sm">
-                    <div className="card-body">
-                      <h6 className="card-title">Total Purchases</h6>
-                      <h3 className="text-success">{summary?.totalPurchases?.totalAmount ?? 'N/A'} Rwf</h3>
-                    </div>
-                  </div>
-                </div>
-                {summary?.outstandingCredits && (
-                  <div className="col-md-6">
-                    <div className="card text-center shadow-sm">
-                      <div className="card-body">
-                        <h6 className="card-title">Outstanding Credits</h6>
-                        <h3 className="text-warning">
-                          {summary?.outstandingCredits?.totalOutstanding ?? 'N/A'} Rwf
-                        </h3>
-                        {typeof summary?.outstandingCredits?.numberOfOutstanding !== 'undefined' && (
-                          <div style={{ fontSize: 14, color: '#888' }}>
-                            {summary?.outstandingCredits?.numberOfOutstanding} outstanding purchases
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Stat Cards for Total Purchases */}
-            {total && (
-              <div className="row g-4 mb-4">
-                <div className="col-md-4">
-                  <div className="card text-center shadow-sm">
-                    <div className="card-body">
-                      <h6 className="card-title">Total Purchases (Count)</h6>
-                      <h3 className="text-primary">{total.totalPurchases}</h3>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="card text-center shadow-sm">
-                    <div className="card-body">
-                      <h6 className="card-title">Total Amount</h6>
-                      <h3 className="text-success">{total.totalAmount} Rwf</h3>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="card text-center shadow-sm">
-                    <div className="card-body">
-                      <h6 className="card-title">Total Quantity</h6>
-                      <h3 className="text-info">{total.totalQuantity}</h3>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Purchases Over Time Chart */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <div className="card shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title mb-3">Purchases Over Time</h6>
-                  <div style={{ height: 320 }}>
-                    <Bar data={barChartData} options={barChartOptions} height={220} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Purchases by Supplier Table */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <div className="card shadow-sm">
-                <div className="card-body">
-                  <h6 className="card-title mb-3">Purchases by Supplier</h6>
-                  <div className="table-responsive">
-                    <table className="table table-hover">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Supplier</th>
-                          <th>Total Amount</th>
-                          <th>Number of Purchases</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(purchasesBySupplier).map(([supplier, amount]) => (
-                          <tr key={supplier}>
-                            <td>{supplier}</td>
-                            <td>{amount.toLocaleString()} Rwf</td>
-                            <td>
-                              {purchases.filter(p => p.supplier === supplier).length}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="w-100 px-4 mt-4" style={{ maxWidth: '100%' }}>
           <div className="row g-4">
             {/* Purchase Form */}
@@ -331,13 +222,13 @@ function StockKeeperDashboard() {
                 <div className="card-body">
                   <h6 className="card-title mb-3">Add Purchase</h6>
                   <form onSubmit={handlePurchaseSubmit}>
-                    <div className="mb-2">
-                      <label className="form-label">Medicine Name</label>
+                  <div className="mb-2">
+                      <label className="form-label">Supplier Name</label>
                       <input 
                         type="text" 
                         className="form-control" 
-                        value={purchase.medicineName} 
-                        onChange={e => setPurchase({ ...purchase, medicineName: e.target.value })}
+                        value={purchase.supplier} 
+                        onChange={e => setPurchase({ ...purchase, supplier: e.target.value })}
                         required
                       />
                     </div>
@@ -354,16 +245,7 @@ function StockKeeperDashboard() {
                         placeholder="Enter amount in Rwf"
                       />
                     </div>
-                    <div className="mb-2">
-                      <label className="form-label">Supplier</label>
-                      <input 
-                        type="text" 
-                        className="form-control" 
-                        value={purchase.supplier} 
-                        onChange={e => setPurchase({ ...purchase, supplier: e.target.value })}
-                        required
-                      />
-                    </div>
+                    
                     <div className="mb-2">
                       <label className="form-label">Purchase Date</label>
                       <DatePicker
@@ -383,8 +265,7 @@ function StockKeeperDashboard() {
                         required
                       >
                         <option value="paid">Paid</option>
-                        <option value="pending">Pending</option>
-                        <option value="cancelled">Cancelled</option>
+                        <option value="credit">Credit</option>
                       </select>
                     </div>
                     <div className="mb-2">
@@ -418,42 +299,54 @@ function StockKeeperDashboard() {
                       type="text"
                       className="form-control"
                       style={{ maxWidth: 220 }}
-                      placeholder="Search by medicine or supplier..."
+                      placeholder="Search by supplier..."
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                     />
                   </div>
-                  {loading ? <div>Loading...</div> : error ? <div className="alert alert-danger py-1">{error}</div> : (
-                  <div style={{ maxHeight: 350, overflowY: 'auto', borderRadius: 12 }}>
-                    <table className="table table-sm table-striped align-middle" style={{ background: '#fff', borderRadius: 12 }}>
-                      <thead className="table-success">
-                        <tr>
-                          <th>Medicine Name</th>
-                          <th>Supplier</th>
-                          <th>Purchase Date</th>
-                          <th>Total Amount</th>
-                          <th>Status</th>
-                          <th>Notes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredPurchases.map((p) => (
-                          <tr key={p._id}>
-                            <td>{p.medicineName}</td>
-                            <td>{p.supplier}</td>
-                            <td>{new Date(p.purchaseDate).toLocaleDateString()}</td>
-                            <td>{p.totalAmount.toLocaleString()} Rwf</td>
-                            <td>
-                              <span className={`badge bg-${p.status === 'paid' ? 'success' : p.status === 'pending' ? 'warning text-dark' : 'danger'}`}>
-                                {p.status}
-                              </span>
-                            </td>
-                            <td>{p.notes}</td>
+                  {loading ? (
+                    <div className="text-center py-4">
+                      <div className="spinner-border text-success" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    </div>
+                  ) : error ? (
+                    <div className="alert alert-danger py-1">{error}</div>
+                  ) : (
+                    <div style={{ maxHeight: 350, overflowY: 'auto', borderRadius: 12 }}>
+                      <table className="table table-sm table-striped align-middle" style={{ background: '#fff', borderRadius: 12 }}>
+                        <thead className="table-success">
+                          <tr>
+                            <th>Purchase Date</th>
+                            <th>Supplier</th>
+                            <th>Total Amount</th>
+                            <th>Status</th>
+                            <th>Notes</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {filteredPurchases.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="text-center py-4">No purchases found</td>
+                            </tr>
+                          ) : (
+                            filteredPurchases.map((p) => (
+                              <tr key={p._id}>
+                                <td>{p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString() : 'N/A'}</td>
+                                <td>{p.supplier || 'N/A'}</td>
+                                <td>{(p.totalAmount || 0).toLocaleString()} Rwf</td>
+                                <td>
+                                  <span className={`badge bg-${p.status === 'paid' ? 'success' : p.status === 'credit' ? 'warning text-dark' : 'danger'}`}>
+                                    {p.status || 'N/A'}
+                                  </span>
+                                </td>
+                                <td>{p.notes || 'N/A'}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>

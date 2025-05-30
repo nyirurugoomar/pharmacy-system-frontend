@@ -11,7 +11,7 @@ import {
   ArcElement,
 } from 'chart.js';
 import { useNavigate } from 'react-router-dom';
-import { FaChartLine, FaBox, FaSignOutAlt, FaSearch, FaUser, FaMoneyBillWave, FaCreditCard, FaMobileAlt, FaCashRegister, FaFileExcel, FaFilePdf } from 'react-icons/fa';
+import { FaChartLine, FaBox, FaSignOutAlt, FaSearch, FaUser, FaMoneyBillWave, FaCreditCard, FaMobileAlt, FaCashRegister, FaFileExcel, FaFilePdf, FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -40,6 +40,9 @@ function AdminDashboard() {
   const [endDate, setEndDate] = useState(new Date());
   const [insuranceStatusData, setInsuranceStatusData] = useState(null);
   const [purchaseData, setPurchaseData] = useState(null);
+  const [insuranceDetails, setInsuranceDetails] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [searchTerm, setSearchTerm] = useState('');
 
   const token = localStorage.getItem('token');
   const authHeader = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
@@ -87,7 +90,7 @@ function AdminDashboard() {
     }
   };
 
-  // Fetch insurance status
+  // Fetch insurance status with details
   const fetchInsuranceStatus = async () => {
     setLoading(true);
     setError('');
@@ -103,14 +106,16 @@ function AdminDashboard() {
 
       if (!paymentsRes.ok) {
         setInsuranceStatusData({
-          'Paid': 0,
-          'Not Paid': 0,
-          'Pending': 0
+          'Paid': { count: 0, amount: 0 },
+          'Not Paid': { count: 0, amount: 0 },
+          'Pending': { count: 0, amount: 0 }
         });
+        setInsuranceDetails([]);
         return;
       }
 
       const payments = await paymentsRes.json();
+      setInsuranceDetails(payments);
 
       // Process the data to get status counts and amounts
       const statusData = {
@@ -134,6 +139,7 @@ function AdminDashboard() {
         'Not Paid': { count: 0, amount: 0 },
         'Pending': { count: 0, amount: 0 }
       });
+      setInsuranceDetails([]);
     } finally {
       setLoading(false);
     }
@@ -283,6 +289,34 @@ function AdminDashboard() {
     localStorage.removeItem('token');
     navigate('/login');
   };
+
+  // Sort insurance details
+  const sortInsuranceDetails = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+
+    const sortedData = [...insuranceDetails].sort((a, b) => {
+      if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
+      if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    setInsuranceDetails(sortedData);
+  };
+
+  // Filter insurance details
+  const filteredInsuranceDetails = insuranceDetails.filter(payment => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      payment.patientName?.toLowerCase().includes(searchLower) ||
+      payment.insuranceCompany?.toLowerCase().includes(searchLower) ||
+      payment.status?.toLowerCase().includes(searchLower) ||
+      payment.amount?.toString().includes(searchLower)
+    );
+  });
 
   useEffect(() => {
     fetchFinancialData();
@@ -497,22 +531,103 @@ function AdminDashboard() {
                     </div>
                   </div>
                   {insuranceStatusData ? (
-                    <div className="row g-4">
-                      {Object.entries(insuranceStatusData).map(([status, data]) => (
-                        <div key={status} className="col-md-4">
-                          <div className="d-flex align-items-center">
-                            <div className={`bg-${getStatusColor(status)} bg-opacity-10 p-3 rounded-3 me-3`}>
-                              <FaCreditCard className={`text-${getStatusColor(status)}`} size={20} />
+                    <>
+                      <div className="row g-4 mb-4">
+                        {Object.entries(insuranceStatusData).map(([status, data]) => (
+                          <div key={status} className="col-md-4">
+                            <div className="d-flex align-items-center">
+                              <div className={`bg-${getStatusColor(status)} bg-opacity-10 p-3 rounded-3 me-3`}>
+                                <FaCreditCard className={`text-${getStatusColor(status)}`} size={20} />
+                              </div>
+                              <div>
+                                <h6 className="text-muted mb-1">{status}</h6>
+                                <h5 className="mb-0">{data.count} Records</h5>
+                                <small className="text-muted">{data.amount.toLocaleString()} Rwf</small>
+                              </div>
                             </div>
-                            <div>
-                              <h6 className="text-muted mb-1">{status}</h6>
-                              <h5 className="mb-0">{data.count} Records</h5>
-                              <small className="text-muted">{data.amount.toLocaleString()} Rwf</small>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Detailed Insurance Status Table */}
+                      <div className="mt-4">
+                        <div className="d-flex justify-content-between align-items-center mb-3">
+                          <h6 className="mb-0">Detailed Insurance Records</h6>
+                          <div className="d-flex gap-2">
+                            <div className="input-group" style={{ width: '300px' }}>
+                              <span className="input-group-text bg-light border-end-0">
+                                <FaSearch className="text-muted" />
+                              </span>
+                              <input
+                                type="text"
+                                className="form-control border-start-0"
+                                placeholder="Search records..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                              />
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="table-responsive">
+                          <table className="table table-hover">
+                            <thead className="table-light">
+                              <tr>
+                                <th onClick={() => sortInsuranceDetails('patientName')} style={{ cursor: 'pointer' }}>
+                                  Patient Name
+                                  {sortConfig.key === 'patientName' && (
+                                    sortConfig.direction === 'asc' ? <FaSortUp className="ms-1" /> : <FaSortDown className="ms-1" />
+                                  )}
+                                </th>
+                                <th onClick={() => sortInsuranceDetails('insuranceCompany')} style={{ cursor: 'pointer' }}>
+                                  Insurance Company
+                                  {sortConfig.key === 'insuranceCompany' && (
+                                    sortConfig.direction === 'asc' ? <FaSortUp className="ms-1" /> : <FaSortDown className="ms-1" />
+                                  )}
+                                </th>
+                                <th onClick={() => sortInsuranceDetails('amount')} style={{ cursor: 'pointer' }}>
+                                  Amount
+                                  {sortConfig.key === 'amount' && (
+                                    sortConfig.direction === 'asc' ? <FaSortUp className="ms-1" /> : <FaSortDown className="ms-1" />
+                                  )}
+                                </th>
+                                <th onClick={() => sortInsuranceDetails('date')} style={{ cursor: 'pointer' }}>
+                                  Date
+                                  {sortConfig.key === 'date' && (
+                                    sortConfig.direction === 'asc' ? <FaSortUp className="ms-1" /> : <FaSortDown className="ms-1" />
+                                  )}
+                                </th>
+                                <th onClick={() => sortInsuranceDetails('status')} style={{ cursor: 'pointer' }}>
+                                  Status
+                                  {sortConfig.key === 'status' && (
+                                    sortConfig.direction === 'asc' ? <FaSortUp className="ms-1" /> : <FaSortDown className="ms-1" />
+                                  )}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredInsuranceDetails.map((payment, index) => (
+                                <tr key={index}>
+                                  <td>{payment.patientName || 'N/A'}</td>
+                                  <td>{payment.insuranceCompany || 'N/A'}</td>
+                                  <td>{payment.amount?.toLocaleString() || '0'} Rwf</td>
+                                  <td>{new Date(payment.date).toLocaleDateString()}</td>
+                                  <td>
+                                    <span className={`badge bg-${getStatusColor(payment.status)}`}>
+                                      {payment.status || 'Pending'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                              {filteredInsuranceDetails.length === 0 && (
+                                <tr>
+                                  <td colSpan="5" className="text-center py-4">No insurance records found</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <div className="text-center py-4">No insurance data available</div>
                   )}
